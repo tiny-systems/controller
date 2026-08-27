@@ -20,6 +20,7 @@ import (
 const (
 	answerYes   = "yes"
 	sessionName = "flaky-test"
+	msgKey      = "message"
 )
 
 func testServer(t *testing.T, objs ...client.Object) *Server {
@@ -150,8 +151,8 @@ func TestAttentionDedupesPerSession(t *testing.T) {
 		return out
 	}
 
-	first := post(map[string]string{"message": "waiting at a permission prompt", "session": sessionName})
-	second := post(map[string]string{"message": "still waiting", "session": sessionName})
+	first := post(map[string]string{msgKey: "waiting at a permission prompt", "session": sessionName})
+	second := post(map[string]string{msgKey: "still waiting", "session": sessionName})
 	if first["questionId"] != second["questionId"] || second["deduped"] != "true" {
 		t.Fatalf("expected dedupe onto one question: %v then %v", first, second)
 	}
@@ -170,7 +171,7 @@ func TestAttentionDedupesPerSession(t *testing.T) {
 	if err := s.Client.Update(context.Background(), &q); err != nil {
 		t.Fatal(err)
 	}
-	third := post(map[string]string{"message": "new question", "session": sessionName})
+	third := post(map[string]string{msgKey: "new question", "session": sessionName})
 	if third["questionId"] == first["questionId"] {
 		t.Fatal("an answered notification must not be reused")
 	}
