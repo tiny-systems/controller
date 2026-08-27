@@ -1,0 +1,66 @@
+# The human gate as one deployment: the ask_human MCP endpoint plus the
+# /attention safety net, writing Question objects in its own namespace.
+# Sessions reach it at http://tiny-human.<namespace>.svc:8080/mcp — inject
+# that into any agent's MCP config (kelos AgentConfig, plain settings.json).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tiny-human
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tiny-human
+rules:
+  - apiGroups: ["agents.tinysystems.io"]
+    resources: ["questions"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"] # caller-IP -> pod -> session attribution
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tiny-human
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tiny-human
+subjects:
+  - kind: ServiceAccount
+    name: tiny-human
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tiny-human
+  labels: { app: tiny-human }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: tiny-human } }
+  template:
+    metadata: { labels: { app: tiny-human } }
+    spec:
+      serviceAccountName: tiny-human
+      containers:
+        - name: server
+          image: ghcr.io/tiny-systems/controller:latest
+          args: ["--addr=:8080"]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom: { fieldRef: { fieldPath: metadata.namespace } }
+          ports: [{ containerPort: 8080 }]
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tiny-human
+spec:
+  selector: { app: tiny-human }
+  ports: [{ port: 8080, targetPort: 8080 }]
