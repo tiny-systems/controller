@@ -53,6 +53,11 @@ linters:
           - dupl
           - lll
         path: internal/*
+      # Test fixtures repeat literals on purpose; hoisting each into a
+      # constant makes the tests read worse, not better.
+      - linters:
+          - goconst
+        path: _test\.go
     paths:
       - third_party$
       - builtin$
