@@ -17,6 +17,11 @@ import (
 	tinyv1 "github.com/tiny-systems/controller/api/v1alpha1"
 )
 
+const (
+	answerYes   = "yes"
+	sessionName = "flaky-test"
+)
+
 func testServer(t *testing.T, objs ...client.Object) *Server {
 	t.Helper()
 	scheme := runtime.NewScheme()
@@ -42,7 +47,7 @@ func TestAskBlocksUntilAnswered(t *testing.T) {
 	}
 	done := make(chan result, 1)
 	go func() {
-		_, out, err := s.ask(ctx, nil, AskInput{Question: "Force-push the rebased branch?", Options: []string{"yes", "no"}})
+		_, out, err := s.ask(ctx, nil, AskInput{Question: "Force-push the rebased branch?", Options: []string{answerYes, "no"}})
 		done <- result{out, err}
 	}()
 
@@ -70,7 +75,7 @@ func TestAskBlocksUntilAnswered(t *testing.T) {
 	}
 
 	// The human answers.
-	q.Status.Answer = "yes"
+	q.Status.Answer = answerYes
 	now := metav1.Now()
 	q.Status.AnsweredAt = &now
 	if err := s.Client.Update(ctx, &q); err != nil {
@@ -79,7 +84,7 @@ func TestAskBlocksUntilAnswered(t *testing.T) {
 
 	select {
 	case r := <-done:
-		if r.err != nil || r.out.Answer != "yes" {
+		if r.err != nil || r.out.Answer != answerYes {
 			t.Fatalf("got %+v", r)
 		}
 	case <-time.After(2 * time.Second):
@@ -145,8 +150,8 @@ func TestAttentionDedupesPerSession(t *testing.T) {
 		return out
 	}
 
-	first := post(map[string]string{"message": "waiting at a permission prompt", "session": "flaky-test"})
-	second := post(map[string]string{"message": "still waiting", "session": "flaky-test"})
+	first := post(map[string]string{"message": "waiting at a permission prompt", "session": sessionName})
+	second := post(map[string]string{"message": "still waiting", "session": sessionName})
 	if first["questionId"] != second["questionId"] || second["deduped"] != "true" {
 		t.Fatalf("expected dedupe onto one question: %v then %v", first, second)
 	}
@@ -165,7 +170,7 @@ func TestAttentionDedupesPerSession(t *testing.T) {
 	if err := s.Client.Update(context.Background(), &q); err != nil {
 		t.Fatal(err)
 	}
-	third := post(map[string]string{"message": "new question", "session": "flaky-test"})
+	third := post(map[string]string{"message": "new question", "session": sessionName})
 	if third["questionId"] == first["questionId"] {
 		t.Fatal("an answered notification must not be reused")
 	}

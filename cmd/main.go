@@ -29,7 +29,8 @@ import (
 func main() {
 	var addr, namespace string
 	flag.StringVar(&addr, "addr", ":8080", "listen address for /mcp, /attention and /healthz")
-	flag.StringVar(&namespace, "namespace", os.Getenv("POD_NAMESPACE"), "namespace Questions live in (default: POD_NAMESPACE)")
+	flag.StringVar(&namespace, "namespace", os.Getenv("POD_NAMESPACE"),
+		"namespace Questions live in (default: POD_NAMESPACE)")
 	flag.Parse()
 	if namespace == "" {
 		namespace = "default"
