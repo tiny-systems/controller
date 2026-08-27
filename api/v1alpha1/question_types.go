@@ -59,6 +59,28 @@ type QuestionSpec struct {
 	// ask_human) or "notification" (the safety net saw the agent waiting).
 	// +optional
 	Reason string `json:"reason,omitempty"`
+	// Action, when set, is what an "allow" answer authorizes. The sidecar
+	// only ever writes this request; the controller is the one with the
+	// permissions to carry it out. That split is the security model.
+	// +optional
+	Action *QuestionAction `json:"action,omitempty"`
+}
+
+// Action types the controller knows how to carry out.
+const (
+	ActionExposePort    = "exposePort"
+	ActionCreateSession = "createSession"
+)
+
+// QuestionAction is a requested act, parked until a human allows it.
+type QuestionAction struct {
+	// Type of act: exposePort or createSession.
+	// +kubebuilder:validation:Enum=exposePort;createSession
+	Type string `json:"type"`
+	// Params of the act, by type:
+	// exposePort: port, pod, name. createSession: task, repo, image.
+	// +optional
+	Params map[string]string `json:"params,omitempty"`
 }
 
 // QuestionStatus is the human's side. Writing a non-empty answer resolves the
@@ -74,6 +96,15 @@ type QuestionStatus struct {
 	// "kubectl"), informational.
 	// +optional
 	AnsweredBy string `json:"answeredBy,omitempty"`
+	// Result of the action after an allow: the controller reports what it
+	// did (a URL, a session name) or the error it hit. The sidecar hands
+	// this back to the waiting agent.
+	// +optional
+	Result string `json:"result,omitempty"`
+	// ActionDone marks the action carried out (or terminally refused), so
+	// the controller acts exactly once.
+	// +optional
+	ActionDone bool `json:"actionDone,omitempty"`
 }
 
 // +kubebuilder:object:root=true

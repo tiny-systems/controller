@@ -61,7 +61,8 @@ spec:
       - command:
         - /manager
         args:
-          - --addr=:8080
+          - manager
+          - --leader-elect
         image: controller:latest
         name: manager
         ports:
@@ -84,14 +85,14 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 8080
-          initialDelaySeconds: 5
+            port: 8081
+          initialDelaySeconds: 15
           periodSeconds: 20
         readinessProbe:
           httpGet:
-            path: /healthz
-            port: 8080
-          initialDelaySeconds: 2
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
           periodSeconds: 10
         # TODO(user): Configure the resources accordingly based on the project requirements.
         # More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/

@@ -3,6 +3,7 @@
 # It should be run by config/default
 resources:
 - bases/agents.tinysystems.io_questions.yaml
+- bases/agents.tinysystems.io_sessions.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

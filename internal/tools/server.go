@@ -1,5 +1,5 @@
 /*
-Package human is the ask-human surface: the gate an unattended agent reaches
+Package tools is the MCP toolbox an agent reaches the cluster through: the gate an unattended agent reaches
 for when it hits a decision it must not make alone.
 
 Two doors into the same object:
@@ -15,7 +15,7 @@ Two doors into the same object:
 Nothing here knows what a "session runner" is. kelos, a bare pod, anything
 able to reach this server over the cluster network gets the same gate.
 */
-package human
+package tools
 
 import (
 	"context"
@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -75,7 +76,7 @@ type AwaitInput struct {
 
 // MCP builds the tool server.
 func (s *Server) MCP() *mcp.Server {
-	srv := mcp.NewServer(&mcp.Implementation{Name: "tiny-human", Version: "v0.1.0"}, nil)
+	srv := mcp.NewServer(&mcp.Implementation{Name: "tiny-mcp", Version: "v0.1.0"}, nil)
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "ask_human",
 		Description: "Ask the human operator a question and WAIT for their answer. Use it before any action that is " +
@@ -87,6 +88,20 @@ func (s *Server) MCP() *mcp.Server {
 		Name:        "await_answer",
 		Description: "Resume waiting for the answer to a question ask_human already created.",
 	}, s.await)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "session_list",
+		Description: "List the coding-agent sessions running in this cluster: name, phase, pod.",
+	}, s.sessionList)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "session_create",
+		Description: "Start another coding-agent session with a task of its own. The human operator is asked to " +
+			"allow it first — the call blocks until they decide.",
+	}, s.sessionCreate)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "expose_port",
+		Description: "Make a port your process is listening on reachable inside the cluster as a Service. The human " +
+			"operator is asked to allow it first — the call blocks until they decide. Returns the URL.",
+	}, s.exposePort)
 	return srv
 }
 
@@ -166,9 +181,22 @@ func (s *Server) handleAttention(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	session := s.sessionForIP(ctx, remoteIP(r))
-	if in.Session != "" {
+	session := s.sessionFor(ctx)
+	if session.Name == "" {
+		session = s.sessionForIP(ctx, remoteIP(r))
+	}
+	// The body's session may only CONFIRM the derived identity, never replace
+	// it — accepting a caller-chosen name would let any pod plant attention
+	// cards under another session's row.
+	if in.Session != "" && session.Name != "" && in.Session != session.Name {
+		http.Error(w, fmt.Sprintf("session %q does not match the caller's identity %q", in.Session, session.Name), http.StatusForbidden)
+		return
+	}
+	if session.Name == "" && in.Session != "" {
+		// No identity derivable at all (rare: central mode, hostNetwork). The
+		// hint is used but marked as such, so a screen can render it softer.
 		session.Name = in.Session
+		session.Kind = "unverified"
 	}
 
 	// Reuse the open notification for this session if one exists.
@@ -217,6 +245,43 @@ func (s *Server) createQuestion(ctx context.Context, spec tinyv1.QuestionSpec) (
 	return q, nil
 }
 
+// waitForResult blocks like waitFor but returns the controller's action
+// result: the question must be answered AND its action carried out. A deny is
+// an error naming the human's words; an interruption names the question id so
+// the model can resume.
+func (s *Server) waitForResult(ctx context.Context, name string) (string, error) {
+	interval := s.PollInterval
+	if interval <= 0 {
+		interval = 2 * time.Second
+	}
+	t := time.NewTicker(interval)
+	defer t.Stop()
+
+	for {
+		q := &tinyv1.Question{}
+		err := s.Client.Get(ctx, types.NamespacedName{Namespace: s.Namespace, Name: name}, q)
+		switch {
+		case err != nil && ctx.Err() != nil:
+			return "", fmt.Errorf("interrupted while waiting — call await_answer with questionId %q to keep waiting", name)
+		case err != nil:
+			return "", fmt.Errorf("question %s is gone: %w", name, err)
+		case q.Answered() && !approvedAnswer(q.Status.Answer):
+			return "", fmt.Errorf("denied by the human operator: %s", q.Status.Answer)
+		case q.Answered() && q.Status.ActionDone:
+			return q.Status.Result, nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("interrupted while waiting — call await_answer with questionId %q to keep waiting", name)
+		case <-t.C:
+		}
+	}
+}
+
+// approvedAnswer is the vocabulary of a yes on a gated action.
+func approvedAnswer(answer string) bool { return answer == "allow" || answer == "yes" }
+
 // waitFor blocks until the named question carries an answer, the context ends,
 // or the question is gone. An interruption is reported WITH the question id so
 // the model resumes with await_answer instead of asking again — asking again
@@ -254,6 +319,11 @@ func (s *Server) waitFor(ctx context.Context, name string) (*mcp.CallToolResult,
 // effort by design — an unattributed question still reaches the human, it
 // just renders without a session row to sit under.
 func (s *Server) sessionFor(ctx context.Context) tinyv1.SessionRef {
+	// Sidecar mode: the pod says who it is through the downward API —
+	// unforgeable, no lookup. Central mode falls back to caller IP.
+	if name := os.Getenv("TINY_SESSION_NAME"); name != "" {
+		return tinyv1.SessionRef{Name: name, Kind: "Session", Pod: os.Getenv("POD_NAME")}
+	}
 	ip, _ := ctx.Value(callerIPKey).(string)
 	return s.sessionForIP(ctx, ip)
 }
@@ -272,18 +342,17 @@ func (s *Server) sessionForIP(ctx context.Context, ip string) tinyv1.SessionRef 
 			continue
 		}
 		ref := tinyv1.SessionRef{Pod: p.Name, Kind: "Pod", Name: p.Name}
-		// A runner that stamps its pods gets its own identity back. kelos
-		// first; anything else falls back to the release/instance label.
-		for _, key := range []string{"kelos.dev/session", "app.kubernetes.io/instance"} {
-			if v := p.Labels[key]; v != "" {
-				ref.Name = v
-				ref.Kind = "Session"
-				break
-			}
+		if v := p.Labels[SessionLabel]; v != "" {
+			ref.Name = v
+			ref.Kind = "Session"
 		}
 		return ref
 	}
 	return tinyv1.SessionRef{}
+}
+
+func clientKey(namespace, name string) types.NamespacedName {
+	return types.NamespacedName{Namespace: namespace, Name: name}
 }
 
 func remoteIP(r *http.Request) string {

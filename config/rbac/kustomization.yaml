@@ -22,6 +22,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the tiny-controller itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- session_admin_role.yaml
+- session_editor_role.yaml
+- session_viewer_role.yaml
 - question_admin_role.yaml
 - question_editor_role.yaml
 - question_viewer_role.yaml

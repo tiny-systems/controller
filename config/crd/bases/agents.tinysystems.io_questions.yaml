@@ -56,6 +56,28 @@ spec:
           spec:
             description: QuestionSpec is what the agent asked.
             properties:
+              action:
+                description: |-
+                  Action, when set, is what an "allow" answer authorizes. The sidecar
+                  only ever writes this request; the controller is the one with the
+                  permissions to carry it out. That split is the security model.
+                properties:
+                  params:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Params of the act, by type:
+                      exposePort: port, pod, name. createSession: task, repo, image.
+                    type: object
+                  type:
+                    description: 'Type of act: exposePort or createSession.'
+                    enum:
+                    - exposePort
+                    - createSession
+                    type: string
+                required:
+                - type
+                type: object
               askedBy:
                 description: |-
                   AskedBy is the tool caller's self-description, informational
@@ -99,6 +121,11 @@ spec:
               QuestionStatus is the human's side. Writing a non-empty answer resolves the
               question: the blocked ask_human call returns it to the agent.
             properties:
+              actionDone:
+                description: |-
+                  ActionDone marks the action carried out (or terminally refused), so
+                  the controller acts exactly once.
+                type: boolean
               answer:
                 description: 'Answer as the human gave it: one of the options, or
                   free text.'
@@ -111,6 +138,12 @@ spec:
                 description: |-
                   AnsweredBy is the answering client's self-description ("tiny tui",
                   "kubectl"), informational.
+                type: string
+              result:
+                description: |-
+                  Result of the action after an allow: the controller reports what it
+                  did (a URL, a session name) or the error it hit. The sidecar hands
+                  this back to the waiting agent.
                 type: string
             type: object
         type: object

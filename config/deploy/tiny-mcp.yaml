@@ -1,16 +1,16 @@
 # The human gate as one deployment: the ask_human MCP endpoint plus the
 # /attention safety net, writing Question objects in its own namespace.
-# Sessions reach it at http://tiny-human.<namespace>.svc:8080/mcp — inject
+# Sessions reach it at http://tiny-mcp.<namespace>.svc:8080/mcp — inject
 # that into any agent's MCP config (kelos AgentConfig, plain settings.json).
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: tiny-human
+  name: tiny-mcp
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: tiny-human
+  name: tiny-mcp
 rules:
   - apiGroups: ["agents.tinysystems.io"]
     resources: ["questions"]
@@ -22,27 +22,27 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: tiny-human
+  name: tiny-mcp
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: tiny-human
+  name: tiny-mcp
 subjects:
   - kind: ServiceAccount
-    name: tiny-human
+    name: tiny-mcp
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: tiny-human
-  labels: { app: tiny-human }
+  name: tiny-mcp
+  labels: { app: tiny-mcp }
 spec:
   replicas: 1
-  selector: { matchLabels: { app: tiny-human } }
+  selector: { matchLabels: { app: tiny-mcp } }
   template:
-    metadata: { labels: { app: tiny-human } }
+    metadata: { labels: { app: tiny-mcp } }
     spec:
-      serviceAccountName: tiny-human
+      serviceAccountName: tiny-mcp
       containers:
         - name: server
           image: ghcr.io/tiny-systems/controller:latest
@@ -60,7 +60,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: tiny-human
+  name: tiny-mcp
 spec:
-  selector: { app: tiny-human }
+  selector: { app: tiny-mcp }
   ports: [{ port: 8080, targetPort: 8080 }]
