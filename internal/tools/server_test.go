@@ -176,3 +176,20 @@ func TestAttentionDedupesPerSession(t *testing.T) {
 		t.Fatal("an answered notification must not be reused")
 	}
 }
+
+// A finished turn is not a question; the hook's post is acknowledged and no
+// card appears.
+func TestAttentionIgnoresStopReason(t *testing.T) {
+	s := testServer(t)
+	b, _ := json.Marshal(map[string]string{msgKey: "The agent finished its turn.", "reason": "stop"})
+	req := httptest.NewRequest(http.MethodPost, "/attention", bytes.NewReader(b))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("code %d", w.Code)
+	}
+	list := &tinyv1.QuestionList{}
+	if err := s.Client.List(context.Background(), list, client.InNamespace("agents")); err != nil || len(list.Items) != 0 {
+		t.Fatalf("a stop created a question: %d", len(list.Items))
+	}
+}

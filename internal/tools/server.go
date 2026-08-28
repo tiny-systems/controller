@@ -176,6 +176,13 @@ func (s *Server) handleAttention(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	// A finished turn is phase information, not a question — recorded cards
+	// for it piled up as eternal "needs you" rows. It will feed session
+	// status when phases land; until then it is acknowledged and dropped.
+	if in.Reason == "stop" {
+		writeJSON(w, map[string]string{"ignored": "true"})
+		return
+	}
 	if strings.TrimSpace(in.Message) == "" {
 		in.Message = "The agent is waiting for your input."
 	}
