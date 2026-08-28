@@ -70,8 +70,12 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	return ctrl.Result{}, nil
 }
 
-// workspaceMount is where the persistent volume lands in both containers.
-const workspaceMount = "/workspace"
+// The persistent volume: its k8s volume name, and where it lands in both
+// containers.
+const (
+	workspaceVolume = "workspace"
+	workspaceMount  = "/workspace"
+)
 
 func workspaceName(s *agentsv1.Session) string { return s.Name + "-workspace" }
 func podName(s *agentsv1.Session) string       { return s.Name + "-agent" }
