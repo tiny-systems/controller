@@ -39,7 +39,7 @@ func (r *QuestionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, nil
 	}
 
-	if !allowAnswer(q.Status.Answer) {
+	if !agentsv1.AllowsAction(q.Status.Answer) {
 		// A refusal is terminal: record it so nobody retries the act.
 		q.Status.ActionDone = true
 		q.Status.Result = "denied"
@@ -57,8 +57,6 @@ func (r *QuestionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	q.Status.Result = result
 	return ctrl.Result{}, r.Status().Update(ctx, q)
 }
-
-func allowAnswer(a string) bool { return a == "allow" || a == "yes" }
 
 func (r *QuestionReconciler) execute(ctx context.Context, q *agentsv1.Question) (string, error) {
 	p := q.Spec.Action.Params

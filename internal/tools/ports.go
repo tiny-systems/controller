@@ -58,7 +58,7 @@ func (s *Server) exposePort(ctx context.Context, _ *mcp.CallToolRequest, in Expo
 func (s *Server) requestAction(ctx context.Context, who agentsv1.SessionRef, text string, action agentsv1.QuestionAction) (string, error) {
 	q, err := s.createQuestion(ctx, agentsv1.QuestionSpec{
 		Text:    text,
-		Options: []string{"allow", "deny"},
+		Options: []string{agentsv1.AnswerAllow, agentsv1.AnswerDeny},
 		Session: who,
 		Reason:  ReasonTool,
 		Action:  &action,

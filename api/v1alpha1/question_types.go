@@ -72,6 +72,16 @@ const (
 	ActionCreateSession = "createSession"
 )
 
+// Answer vocabulary for gated actions.
+const (
+	AnswerAllow = "allow"
+	AnswerDeny  = "deny"
+	AnswerYes   = "yes"
+)
+
+// AllowsAction reports whether an answer authorizes a gated action.
+func AllowsAction(answer string) bool { return answer == AnswerAllow || answer == AnswerYes }
+
 // QuestionAction is a requested act, parked until a human allows it.
 type QuestionAction struct {
 	// Type of act: exposePort or createSession.

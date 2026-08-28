@@ -265,7 +265,7 @@ func (s *Server) waitForResult(ctx context.Context, name string) (string, error)
 			return "", fmt.Errorf("interrupted while waiting — call await_answer with questionId %q to keep waiting", name)
 		case err != nil:
 			return "", fmt.Errorf("question %s is gone: %w", name, err)
-		case q.Answered() && !approvedAnswer(q.Status.Answer):
+		case q.Answered() && !tinyv1.AllowsAction(q.Status.Answer):
 			return "", fmt.Errorf("denied by the human operator: %s", q.Status.Answer)
 		case q.Answered() && q.Status.ActionDone:
 			return q.Status.Result, nil
@@ -278,9 +278,6 @@ func (s *Server) waitForResult(ctx context.Context, name string) (string, error)
 		}
 	}
 }
-
-// approvedAnswer is the vocabulary of a yes on a gated action.
-func approvedAnswer(answer string) bool { return answer == "allow" || answer == "yes" }
 
 // waitFor blocks until the named question carries an answer, the context ends,
 // or the question is gone. An interruption is reported WITH the question id so
@@ -349,10 +346,6 @@ func (s *Server) sessionForIP(ctx context.Context, ip string) tinyv1.SessionRef 
 		return ref
 	}
 	return tinyv1.SessionRef{}
-}
-
-func clientKey(namespace, name string) types.NamespacedName {
-	return types.NamespacedName{Namespace: namespace, Name: name}
 }
 
 func remoteIP(r *http.Request) string {

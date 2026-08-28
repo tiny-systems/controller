@@ -65,7 +65,8 @@ func serve(args []string) {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	var addr, namespace string
 	fs.StringVar(&addr, "addr", ":8080", "listen address for /mcp, /attention and /healthz")
-	fs.StringVar(&namespace, "namespace", os.Getenv("POD_NAMESPACE"), "namespace Questions live in (default: POD_NAMESPACE)")
+	fs.StringVar(&namespace, "namespace", os.Getenv("POD_NAMESPACE"),
+		"namespace Questions live in (default: POD_NAMESPACE)")
 	_ = fs.Parse(args)
 	if namespace == "" {
 		namespace = "default"
@@ -99,11 +100,14 @@ func manager(args []string) {
 	fs.StringVar(&metricsAddr, "metrics-bind-address", "0", "metrics endpoint ('0' disables)")
 	fs.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "health probe endpoint")
 	fs.BoolVar(&enableLeaderElection, "leader-elect", false, "enable leader election")
-	fs.StringVar(&agentImage, "agent-image", "ghcr.io/tiny-systems/agent:latest", "default coding-agent image for sessions")
-	fs.StringVar(&sidecarImage, "sidecar-image", "ghcr.io/tiny-systems/controller:latest", "tiny-mcp sidecar image for sessions")
+	fs.StringVar(&agentImage, "agent-image", "ghcr.io/tiny-systems/agent:latest",
+		"default coding-agent image for sessions")
+	fs.StringVar(&sidecarImage, "sidecar-image", "ghcr.io/tiny-systems/controller:latest",
+		"tiny-mcp sidecar image for sessions")
 	var watchNamespace string
 	fs.StringVar(&watchNamespace, "namespace", os.Getenv("POD_NAMESPACE"),
-		"namespace to watch (default: POD_NAMESPACE). Namespace-scoped by design — a plain Role suffices; empty watches the cluster and needs a ClusterRole")
+		"namespace to watch (default: POD_NAMESPACE). Namespace-scoped by design — a plain Role suffices; "+
+			"empty watches the cluster and needs a ClusterRole")
 	_ = fs.Parse(args)
 
 	ctrl.SetLogger(zap.New(zap.UseDevMode(false)))

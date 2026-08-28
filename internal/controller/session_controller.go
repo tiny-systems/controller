@@ -70,6 +70,9 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	return ctrl.Result{}, nil
 }
 
+// workspaceMount is where the persistent volume lands in both containers.
+const workspaceMount = "/workspace"
+
 func workspaceName(s *agentsv1.Session) string { return s.Name + "-workspace" }
 func podName(s *agentsv1.Session) string       { return s.Name + "-agent" }
 
@@ -120,7 +123,7 @@ func (r *SessionReconciler) ensurePod(ctx context.Context, s *agentsv1.Session) 
 		agentImage = r.Images.Agent
 	}
 
-	workspace := corev1.VolumeMount{Name: "workspace", MountPath: "/workspace"}
+	workspace := corev1.VolumeMount{Name: "workspace", MountPath: workspaceMount}
 	pod = &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName(s),
@@ -147,11 +150,11 @@ func (r *SessionReconciler) ensurePod(ctx context.Context, s *agentsv1.Session) 
 			InitContainers: []corev1.Container{{
 				Name:    "workspace-perms",
 				Image:   "busybox:1.36",
-				Command: []string{"sh", "-c", "chown 61000:61000 /workspace"},
+				Command: []string{"sh", "-c", "chown 61000:61000 " + workspaceMount},
 				SecurityContext: &corev1.SecurityContext{
 					RunAsUser: ptr(int64(0)),
 				},
-				VolumeMounts: []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}},
+				VolumeMounts: []corev1.VolumeMount{{Name: "workspace", MountPath: workspaceMount}},
 			}},
 			Volumes: []corev1.Volume{{
 				Name: "workspace",
@@ -163,7 +166,7 @@ func (r *SessionReconciler) ensurePod(ctx context.Context, s *agentsv1.Session) 
 				{
 					Name:       "agent",
 					Image:      agentImage,
-					WorkingDir: "/workspace",
+					WorkingDir: workspaceMount,
 					// Credentials by convention: a Secret named tiny-agent-env
 					// in the namespace (ANTHROPIC_API_KEY and friends) lands in
 					// the agent's environment. Optional — a cluster without it
