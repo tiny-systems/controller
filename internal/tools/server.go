@@ -180,7 +180,7 @@ func (s *Server) handleAttention(w http.ResponseWriter, r *http.Request) {
 	// for it piled up as eternal "needs you" rows. It will feed session
 	// status when phases land; until then it is acknowledged and dropped.
 	if in.Reason == "stop" {
-		writeJSON(w, map[string]string{"ignored": "true"})
+		ack(w, "ignored")
 		return
 	}
 	if strings.TrimSpace(in.Message) == "" {
@@ -215,7 +215,7 @@ func (s *Server) handleAttention(w http.ResponseWriter, r *http.Request) {
 				if q.Spec.Reason == ReasonNotification && !q.Answered() {
 					q.Spec.Text = in.Message
 					if err := s.Client.Update(ctx, q); err == nil {
-						writeJSON(w, map[string]string{"questionId": q.Name, "deduped": "true"})
+						writeJSON(w, map[string]string{"questionId": q.Name, "deduped": ackTrue})
 						return
 					}
 				}
@@ -361,6 +361,14 @@ func remoteIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// ackTrue is the wire's little word for "yes, handled".
+const ackTrue = "true"
+
+// ack answers a hook post that produced no question.
+func ack(w http.ResponseWriter, what string) {
+	writeJSON(w, map[string]string{what: ackTrue})
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

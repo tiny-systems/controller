@@ -23,14 +23,14 @@ const (
 	msgKey      = "message"
 )
 
-func testServer(t *testing.T, objs ...client.Object) *Server {
+func testServer(t *testing.T) *Server {
 	t.Helper()
 	scheme := runtime.NewScheme()
 	if err := tinyv1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
 	}
 	return &Server{
-		Client:       fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build(),
+		Client:       fake.NewClientBuilder().WithScheme(scheme).Build(),
 		Namespace:    "agents",
 		PollInterval: 10 * time.Millisecond,
 	}
