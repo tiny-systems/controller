@@ -26,6 +26,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -100,17 +101,24 @@ func manager(args []string) {
 	fs.BoolVar(&enableLeaderElection, "leader-elect", false, "enable leader election")
 	fs.StringVar(&agentImage, "agent-image", "ghcr.io/tiny-systems/agent:latest", "default coding-agent image for sessions")
 	fs.StringVar(&sidecarImage, "sidecar-image", "ghcr.io/tiny-systems/controller:latest", "tiny-mcp sidecar image for sessions")
+	var watchNamespace string
+	fs.StringVar(&watchNamespace, "namespace", os.Getenv("POD_NAMESPACE"),
+		"namespace to watch (default: POD_NAMESPACE). Namespace-scoped by design — a plain Role suffices; empty watches the cluster and needs a ClusterRole")
 	_ = fs.Parse(args)
 
 	ctrl.SetLogger(zap.New(zap.UseDevMode(false)))
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	opts := ctrl.Options{
 		Scheme:                 scheme(),
 		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "tiny-controller.tinysystems.io",
-	})
+	}
+	if watchNamespace != "" {
+		opts.Cache = cache.Options{DefaultNamespaces: map[string]cache.Config{watchNamespace: {}}}
+	}
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), opts)
 	if err != nil {
 		log.Fatalf("manager: %v", err)
 	}

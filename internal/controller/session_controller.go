@@ -134,6 +134,25 @@ func (r *SessionReconciler) ensurePod(ctx context.Context, s *agentsv1.Session) 
 			// The workspace survives; the pod is disposable. Never restart in
 			// place — let the controller reconcile a fresh pod that resumes.
 			RestartPolicy: corev1.RestartPolicyNever,
+			// The session's identity: may create Questions, nothing else.
+			ServiceAccountName: "tiny-session",
+			// The agent runs unprivileged (uid 61000); fsGroup makes the
+			// freshly-provisioned workspace volume writable for it.
+			SecurityContext: &corev1.PodSecurityContext{
+				FSGroup: ptr(int64(61000)),
+			},
+			// hostPath-backed provisioners (minikube, kind) ignore fsGroup, so
+			// ownership is set explicitly, once, by a root init container.
+			// fsGroup above still covers CSI volumes that do it properly.
+			InitContainers: []corev1.Container{{
+				Name:    "workspace-perms",
+				Image:   "busybox:1.36",
+				Command: []string{"sh", "-c", "chown 61000:61000 /workspace"},
+				SecurityContext: &corev1.SecurityContext{
+					RunAsUser: ptr(int64(0)),
+				},
+				VolumeMounts: []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}},
+			}},
 			Volumes: []corev1.Volume{{
 				Name: "workspace",
 				VolumeSource: corev1.VolumeSource{
@@ -145,6 +164,17 @@ func (r *SessionReconciler) ensurePod(ctx context.Context, s *agentsv1.Session) 
 					Name:       "agent",
 					Image:      agentImage,
 					WorkingDir: "/workspace",
+					// Credentials by convention: a Secret named tiny-agent-env
+					// in the namespace (ANTHROPIC_API_KEY and friends) lands in
+					// the agent's environment. Optional — a cluster without it
+					// still schedules; the agent then reports the missing key
+					// as a question instead of crashlooping.
+					EnvFrom: []corev1.EnvFromSource{{
+						SecretRef: &corev1.SecretEnvSource{
+							LocalObjectReference: corev1.LocalObjectReference{Name: "tiny-agent-env"},
+							Optional:             ptr(true),
+						},
+					}},
 					Env: []corev1.EnvVar{
 						{Name: "TINY_TASK", Value: s.Spec.Task},
 						{Name: "TINY_REPO", Value: s.Spec.Repo},
@@ -207,3 +237,7 @@ func (r *SessionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Named("session").
 		Complete(r)
 }
+
+// ptr gives a pointer to any value — the small helper the core API's
+// Optional fields keep asking for.
+func ptr[T any](v T) *T { return &v }
