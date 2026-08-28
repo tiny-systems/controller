@@ -123,7 +123,7 @@ func (r *SessionReconciler) ensurePod(ctx context.Context, s *agentsv1.Session) 
 		agentImage = r.Images.Agent
 	}
 
-	workspace := corev1.VolumeMount{Name: "workspace", MountPath: workspaceMount}
+	workspace := corev1.VolumeMount{Name: workspaceVolume, MountPath: workspaceMount}
 	pod = &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName(s),
@@ -154,10 +154,10 @@ func (r *SessionReconciler) ensurePod(ctx context.Context, s *agentsv1.Session) 
 				SecurityContext: &corev1.SecurityContext{
 					RunAsUser: ptr(int64(0)),
 				},
-				VolumeMounts: []corev1.VolumeMount{{Name: "workspace", MountPath: workspaceMount}},
+				VolumeMounts: []corev1.VolumeMount{{Name: workspaceVolume, MountPath: workspaceMount}},
 			}},
 			Volumes: []corev1.Volume{{
-				Name: "workspace",
+				Name: workspaceVolume,
 				VolumeSource: corev1.VolumeSource{
 					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{ClaimName: workspaceName(s)},
 				},
