@@ -1,0 +1,100 @@
+# The tiny runtime, namespace-scoped. Apply with -n <namespace> after the
+# CRDs (config/crd/bases). One always-on pod: the manager. Session pods are
+# created and owned by it and exist only while sessions do.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tiny-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tiny-manager
+rules:
+  - apiGroups: ["agents.tinysystems.io"]
+    resources: ["sessions", "questions"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["agents.tinysystems.io"]
+    resources: ["sessions/status", "questions/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods", "persistentvolumeclaims", "services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tiny-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tiny-manager
+subjects:
+  - kind: ServiceAccount
+    name: tiny-manager
+---
+# The session pods' identity: may create and read Questions, may look at
+# pods. Nothing else — the voice, not the hands.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tiny-session
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: tiny-session
+rules:
+  - apiGroups: ["agents.tinysystems.io"]
+    resources: ["questions"]
+    verbs: ["get", "list", "create"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: tiny-session
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: tiny-session
+subjects:
+  - kind: ServiceAccount
+    name: tiny-session
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tiny-manager
+  labels: { app: tiny-manager }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: tiny-manager }
+  template:
+    metadata:
+      labels: { app: tiny-manager }
+    spec:
+      serviceAccountName: tiny-manager
+      containers:
+        - name: manager
+          image: ghcr.io/tiny-systems/controller:main
+          args:
+            - manager
+            - --agent-image=ghcr.io/tiny-systems/agent:main
+            - --sidecar-image=ghcr.io/tiny-systems/controller:main
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef: { fieldPath: metadata.namespace }
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8081 }
+            initialDelaySeconds: 3
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8081 }
+            initialDelaySeconds: 10
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
